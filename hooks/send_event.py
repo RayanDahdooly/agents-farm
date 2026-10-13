@@ -1,0 +1,96 @@
+"""Claude Code hook: send what Claude is doing to the Agents Farm server.
+
+Claude Code runs this script on PreToolUse, PostToolUse and Stop, and
+passes details as JSON on stdin. We turn that into our own event format
+(see docs/events.md) and POST it to the server.
+
+Rule number one: never get in Claude's way. Short timeout, ignore every
+error, always exit with code 0.
+"""
+
+import json
+import os
+import sys
+import urllib.request
+from datetime import datetime, timezone
+
+SERVER = "http://127.0.0.1:8000/events"
+
+# Claude Code hook name -> our phase
+PHASES = {"PreToolUse": "start", "PostToolUse": "end"}
+
+# Claude Code tool name -> our action (other tools are skipped)
+ACTIONS = {
+    "Read": "read",
+    "Edit": "edit",
+    "Write": "edit",
+    "MultiEdit": "edit",
+    "Bash": "command",
+}
+
+
+def now():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def relative_path(path, project_dir):
+    """/Users/me/project/src/app.py -> src/app.py (None if outside the project)."""
+    if not path:
+        return None
+    relative = os.path.relpath(path, project_dir)
+    if relative.startswith(".."):
+        return None
+    return relative.replace(os.sep, "/")
+
+
+def make_event(hook):
+    """Turn Claude Code's hook JSON into our event, or None to skip it."""
+    name = hook.get("hook_event_name")
+
+    if name == "Stop":
+        return {"agent_id": "main", "file": None, "action": "done",
+                "phase": "end", "command": None, "time": now()}
+
+    if name not in PHASES:
+        return None
+    action = ACTIONS.get(hook.get("tool_name"))
+    if action is None:
+        return None
+
+    tool_input = hook.get("tool_input") or {}
+    file = None
+    command = None
+    if action == "command":
+        command = tool_input.get("command")
+    else:
+        project_dir = os.environ.get("CLAUDE_PROJECT_DIR") or hook.get("cwd") or os.getcwd()
+        file = relative_path(tool_input.get("file_path", ""), project_dir)
+        if file is None:
+            return None  # a file outside this project: not part of the farm
+
+    return {"agent_id": "main", "file": file, "action": action,
+            "phase": PHASES[name], "command": command, "time": now()}
+
+
+def send(event):
+    request = urllib.request.Request(
+        SERVER,
+        data=json.dumps(event).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    urllib.request.urlopen(request, timeout=1)
+
+
+def main():
+    try:
+        event = make_event(json.load(sys.stdin))
+        if event is not None:
+            send(event)
+    except Exception:
+        pass  # server down, bad JSON, anything: Claude must keep working
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

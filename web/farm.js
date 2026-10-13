@@ -1,15 +1,13 @@
 // Agents Farm - builds the farm map and draws it on the canvas.
-// Phase 4a v2: full-screen farm with a house, roads and big fields.
-// Still fake data, no WebSocket yet.
+// The farm grows from real events: every new folder becomes a field,
+// every new file becomes a crop in it.
 
 const TILE = 16; // one tile in the art is 16 x 16 pixels
 
-// Fake data: a field is a folder, a crop is a file in that folder.
-const fields = [
-  { name: "src/",   files: ["app.py", "utils.py"] },
-  { name: "tests/", files: ["test_app.py"] },
-  { name: "root",   files: ["README.md", "requirements.txt"] },
-];
+// A field is a folder, a crop is a file in that folder. Starts empty;
+// addFile() fills it as events arrive. Example after a few events:
+//   [{ name: "src/", files: ["app.py"] }, { name: "root", files: ["README.md"] }]
+const fields = [];
 
 // ---------- Sizes, counted in tiles ----------
 
@@ -55,13 +53,37 @@ function cropFor(fileName) {
   return "crop_carrot";
 }
 
+// ---------- Growing the farm ----------
+
+// "src/app.py" -> field "src/", crop "app.py"
+// "src/db/models.py" -> field "src/", crop "db/models.py"
+// "README.md" -> field "root", crop "README.md"
+// Returns true if the file was new (so the farm must be rebuilt).
+function addFile(path) {
+  const slash = path.indexOf("/");
+  const fieldName = slash === -1 ? "root" : path.slice(0, slash + 1);
+  const fileName = slash === -1 ? path : path.slice(slash + 1);
+
+  let field = fields.find((f) => f.name === fieldName);
+  if (!field) {
+    field = { name: fieldName, files: [] };
+    fields.push(field); // new fields go on the right, so old ones never move
+  }
+  if (field.files.includes(fileName)) return false;
+  field.files.push(fileName);
+  return true;
+}
+
 // ---------- Layout: where everything goes ----------
 // Positions are in "farm tiles": (0, 0) is the top-left corner of the farm.
-// The farm never changes, so we work this out only once.
+// Worked out again every time the farm grows. Things only get added to the
+// right or bottom, so nothing that already exists moves. That matters,
+// because farmers may be standing or walking there.
 
 function computeLayout() {
-  const width = fields.length * FIELD_WIDTH + (fields.length - 1) * FIELD_GAP;
-  const houseLeft = Math.floor((width - HOUSE_WIDTH) / 2);
+  const houseLeft = 2; // above the first field, door in line with its gate
+  const fieldsWidth = fields.length * FIELD_WIDTH + (fields.length - 1) * FIELD_GAP;
+  const width = Math.max(fieldsWidth, houseLeft + HOUSE_WIDTH);
   const houseTop = 1;                     // row 0 is for the "inside" label
   const door = { col: houseLeft + 2, row: houseTop + HOUSE_HEIGHT - 1 };
   const roadRow = door.row + 2;           // one row of path, then the main road
@@ -103,7 +125,14 @@ function computeLayout() {
   };
 }
 
-const layout = computeLayout();
+let layout = computeLayout();
+
+// Called for every event that has a file
+function growFarm(path) {
+  if (!addFile(path)) return; // already on the farm
+  layout = computeLayout();
+  resize(); // rebuilds the map and picks a new zoom if the farm got bigger
+}
 
 // ---------- View: how big tiles are on screen ----------
 
@@ -254,13 +283,13 @@ function resize() {
   // Resizing the canvas resets this, so set it again every time
   ctx.imageSmoothingEnabled = false;
 
-  // Pick the biggest whole zoom (1x to 4x) where the farm plus a border fits.
-  // On very small screens, shrink below 1x instead.
+  // Pick the biggest zoom in half steps (1x, 1.5x, 2x ... 4x) where the farm
+  // plus a border fits. On very small screens, shrink below 1x instead.
   const fit = Math.min(
     canvas.width / ((layout.width + 2) * TILE),
     canvas.height / ((layout.height + 2) * TILE),
   );
-  const zoom = fit >= 1 ? Math.min(4, Math.floor(fit)) : fit;
+  const zoom = fit >= 1 ? Math.min(4, Math.floor(fit * 2) / 2) : fit;
 
   view.size = TILE * zoom;
   view.cols = Math.ceil(canvas.width / view.size);

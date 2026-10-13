@@ -1,6 +1,6 @@
 // Agents Farm - the farmers (agents): where they are, how they walk
 // along the roads, and the log. Uses `layout` and drawing helpers from farm.js.
-// For now a fake demo sends the events. Later the WebSocket will.
+// Events come from the server (connection.js), or from the fake demo with ?demo.
 
 const WALK_SPEED = 4;        // tiles per second
 const DEMO_INTERVAL = 2500;  // milliseconds between fake events
@@ -60,7 +60,8 @@ function routeToRoad(agent) {
 function routeToPlot(agent, plot) {
   const gateCol = plot.field.gateCol;
   let route;
-  if (agent.plot !== null && agent.plot.field === plot.field) {
+  // Compare names, not objects: the layout (and its objects) is rebuilt when the farm grows
+  if (agent.plot !== null && agent.plot.field.name === plot.field.name) {
     // Same field: just use the walkway, no need to leave
     route = [{ col: gateCol, row: agent.plot.row }];
   } else {
@@ -81,16 +82,23 @@ function routeHome(agent) {
 
 // ---------- Events ----------
 
-// Every event (fake now, real later) comes in here
+// Every event (from the server, or the ?demo) comes in here
 function handleEvent(event) {
   addLog(event);
+  if (event.file) growFarm(event.file); // in farm.js: adds the file if it is new
   const agent = agents.find((a) => a.id === event.agent_id);
   if (agent) agent.queue.push(event);
 }
 
-// Act on the next waiting event. Only called when the agent is not walking.
+// Act on the waiting events. Only called when the agent is not walking.
+// Claude works much faster than a farmer walks, so many events can pile up.
+// Only the newest one that means "go somewhere" matters: a file being
+// started, or "done". The farmer walks straight there and skips the rest.
 function startNextEvent(agent) {
-  const event = agent.queue.shift();
+  const moves = agent.queue.filter((e) => e.action === "done" || (e.file && e.phase === "start"));
+  agent.queue = [];
+  if (moves.length === 0) return;
+  const event = moves[moves.length - 1];
 
   if (event.action === "done") {
     if (agent.state !== "home") {
@@ -100,7 +108,8 @@ function startNextEvent(agent) {
     }
   } else if (event.file && event.phase === "start") {
     const plot = findPlot(event.file);
-    if (plot === null || plot === agent.plot) return; // unknown file, or already there
+    if (plot === null) return; // unknown file
+    if (agent.plot !== null && agent.plot.file === plot.file) return; // already there
     agent.path = routeToPlot(agent, plot);
     agent.plot = plot;
     agent.state = "walking";
