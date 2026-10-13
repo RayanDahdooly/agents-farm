@@ -48,3 +48,5 @@ Each tile is 16 × 16 pixels.
 | house_wall_right.png | tile_0075 |
 | house_window.png | tile_0084 |
 | house_door.png | tile_0085 |
+| well_top.png | tile_0092 |
+| well_bottom.png | tile_0104 |

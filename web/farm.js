@@ -18,6 +18,7 @@ const FIELD_GAP = 2;      // grass between two fields
 const MIN_CROP_ROWS = 2;  // keeps fields big, even with only 1 file
 const HOUSE_WIDTH = 5;
 const HOUSE_HEIGHT = 4;
+const WELL_GAP = 2;       // grass between the house and the well
 
 // The house, tile by tile (each name is a file in assets/)
 const HOUSE_TILES = [
@@ -33,7 +34,7 @@ const IMAGE_NAMES = [
   "fence_top_left", "fence_horizontal", "fence_top_right", "fence_left", "fence_right",
   "fence_bottom_left", "fence_bottom_right", "fence_gate_left", "fence_gate_right",
   "crop_carrot", "crop_turnip", "crop_corn", "crop_tomato", "crop_cabbage", "crop_wheat",
-  "farmer", "farmer2",
+  "farmer", "farmer2", "well_top", "well_bottom",
   ...HOUSE_TILES.flat(),
 ];
 
@@ -82,11 +83,17 @@ function addFile(path) {
 
 function computeLayout() {
   const houseLeft = 2; // above the first field, door in line with its gate
-  const fieldsWidth = fields.length * FIELD_WIDTH + (fields.length - 1) * FIELD_GAP;
-  const width = Math.max(fieldsWidth, houseLeft + HOUSE_WIDTH);
   const houseTop = 1;                     // row 0 is for the "inside" label
   const door = { col: houseLeft + 2, row: houseTop + HOUSE_HEIGHT - 1 };
   const roadRow = door.row + 2;           // one row of path, then the main road
+
+  // The well, right of the house: 2 tiles tall, bottom in line with the door.
+  // Farmers stand on the path just below it while they run a command.
+  const wellCol = houseLeft + HOUSE_WIDTH + WELL_GAP;
+  const well = { col: wellCol, top: door.row - 1, standRow: door.row + 1 };
+
+  const fieldsWidth = fields.length * FIELD_WIDTH + (fields.length - 1) * FIELD_GAP;
+  const width = Math.max(fieldsWidth, wellCol + 1);
   const fieldTop = roadRow + 2;           // one row of path up to each gate
 
   // Every field has the same height, so they line up
@@ -120,6 +127,7 @@ function computeLayout() {
     height: fieldTop + fieldHeight,
     house: { left: houseLeft, top: houseTop },
     door,
+    well,
     roadRow,
     fields: fieldBoxes,
   };
@@ -211,16 +219,24 @@ function buildHouse() {
   });
 }
 
-function buildRoads() {
-  const { door, roadRow } = layout;
+function buildWell() {
+  setObject(layout.well.col, layout.well.top, "well_top");
+  setObject(layout.well.col, layout.well.top + 1, "well_bottom");
+}
 
-  // From the door down to the main road
+function buildRoads() {
+  const { door, well, roadRow } = layout;
+
+  // From the door, and from the well, down to the main road
   for (let row = door.row + 1; row <= roadRow; row++) {
     setGround(door.col, row, "path");
   }
+  for (let row = well.standRow; row <= roadRow; row++) {
+    setGround(well.col, row, "path");
+  }
 
-  // The main road, wide enough to reach the door and every gate
-  const cols = [door.col, ...layout.fields.map((box) => box.gateCol)];
+  // The main road, wide enough to reach the door, the well and every gate
+  const cols = [door.col, well.col, ...layout.fields.map((box) => box.gateCol)];
   for (let col = Math.min(...cols); col <= Math.max(...cols); col++) {
     setGround(col, roadRow, "path");
   }
@@ -270,6 +286,7 @@ function buildMap() {
   buildRoads();
   layout.fields.forEach(buildField);
   buildHouse();
+  buildWell();
   addDecorations();
 }
 
@@ -340,6 +357,14 @@ function drawLabels() {
     for (const plot of box.plots) {
       drawText(plot.name, toX(plot.col + 0.5), toY(plot.row + 1) + view.size * 0.45, 0.26, "center", view.size * 2.8);
     }
+  }
+
+  // The command being run at the well (wellCommand and shorten are in agents.js)
+  const command = wellCommand();
+  if (command) {
+    const well = layout.well;
+    const text = "$ " + shorten(command.replace(/\s+/g, " "), 24);
+    drawText(text, toX(well.col + 0.5), toY(well.top) - view.size * 0.2, 0.3, "center", view.size * 4);
   }
 
   // How many agents are inside the house (countAgentsHome is in agents.js)
