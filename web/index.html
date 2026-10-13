@@ -11,7 +11,7 @@
   <!-- Top: status bar -->
   <header id="status-bar">
     <h1>Agents Farm</h1>
-    <p><span id="farmer-count">1 farmer</span> · <span id="connection" class="offline">offline</span></p>
+    <p><span id="farmer-count">0 farmers</span> · <span id="connection" class="offline">offline (demo)</span></p>
   </header>
 
   <!-- Center: the farm is drawn inside this canvas by farm.js -->
@@ -23,11 +23,12 @@
   <aside id="log-panel">
     <h2>Log</h2>
     <ul id="log">
-      <li>Waiting for events…</li>
+      <li id="log-waiting">Waiting for events…</li>
     </ul>
   </aside>
 
-  <!-- Load the script last, so the canvas above already exists -->
+  <!-- farm.js draws the farm, agents.js moves the farmers -->
   <script src="farm.js"></script>
+  <script src="agents.js"></script>
 </body>
 </html>
