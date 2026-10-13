@@ -10,6 +10,7 @@ error, always exit with code 0.
 
 import json
 import os
+import shlex
 import sys
 import urllib.request
 from datetime import datetime, timezone
@@ -28,6 +29,13 @@ ACTIONS = {
     "Bash": "command",
 }
 
+# Bash commands that only read a file, like "cat README.md"
+READ_COMMANDS = {"cat", "head", "tail"}
+
+# If a command has any of these, it is not a simple read: pipes, &&, ;,
+# redirects (cat > file WRITES), wildcards, variables, sub-commands, new lines
+SHELL_SIGNS = "|&;<>*?$`()\n"
+
 
 def now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -41,6 +49,24 @@ def relative_path(path, project_dir):
     if relative.startswith(".."):
         return None
     return relative.replace(os.sep, "/")
+
+
+def file_read_by(command, cwd, project_dir):
+    """"cat README.md" -> "README.md". None unless it is clearly ONE simple
+    read of ONE file in this project. When unsure, say None: the farmer
+    then goes to the well, which is better than the wrong crop."""
+    if any(sign in command for sign in SHELL_SIGNS):
+        return None
+    try:
+        words = shlex.split(command)  # splits like the shell: "cat 'my file.md'" -> 2 words
+    except ValueError:
+        return None  # broken quotes
+    if len(words) != 2 or words[0] not in READ_COMMANDS or words[1].startswith("-"):
+        return None  # flags (head -n 5 x) or several files: skip
+    path = os.path.join(cwd, words[1])
+    if not os.path.isfile(path):
+        return None
+    return relative_path(path, project_dir)
 
 
 def make_event(hook):
@@ -58,12 +84,15 @@ def make_event(hook):
         return None
 
     tool_input = hook.get("tool_input") or {}
+    project_dir = os.environ.get("CLAUDE_PROJECT_DIR") or hook.get("cwd") or os.getcwd()
     file = None
     command = None
     if action == "command":
-        command = tool_input.get("command")
+        command = tool_input.get("command") or ""
+        file = file_read_by(command, hook.get("cwd") or project_dir, project_dir)
+        if file is not None:
+            action = "read"  # "cat README.md" is really a read of README.md
     else:
-        project_dir = os.environ.get("CLAUDE_PROJECT_DIR") or hook.get("cwd") or os.getcwd()
         file = relative_path(tool_input.get("file_path", ""), project_dir)
         if file is None:
             return None  # a file outside this project: not part of the farm
