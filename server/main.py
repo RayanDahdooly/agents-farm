@@ -9,8 +9,8 @@ connections: list[WebSocket] = []
 class Event(BaseModel):
     agent_id: str
     file: str | None = None
-    action: str
-    phase: str
+    action: Literal["read", "edit", "command", "done"]   # ← changed
+    phase: Literal["start", "end"]                        # ← changed
     command: str | None = None
     time: str
 
