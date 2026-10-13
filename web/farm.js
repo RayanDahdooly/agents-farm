@@ -369,8 +369,16 @@ async function main() {
   images = await loadImages();
   resize();
   window.addEventListener("resize", resize);
-  updateStatus();    // in agents.js
-  connectToServer(); // in connection.js
+  updateStatus(); // in agents.js
+
+  // Add ?demo to the URL (localhost:5500/?demo) to see fake events without the server
+  const isDemo = new URLSearchParams(window.location.search).has("demo");
+  if (isDemo) {
+    setConnection("demo"); // in connection.js
+    startDemo();           // in agents.js
+  } else {
+    connectToServer();     // in connection.js
+  }
   requestAnimationFrame(frame);
 }
 

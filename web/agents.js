@@ -165,8 +165,9 @@ function addLog(event) {
 
   const time = event.time.slice(11, 19); // "2026-10-13T14:30:05Z" -> "14:30:05"
   const what = event.file || event.command || "";
+  const phase = event.phase === "start" ? "▶" : "✓"; // started or finished
   const line = document.createElement("li");
-  line.textContent = time + "  " + event.agent_id + " " + event.action + " " + what;
+  line.textContent = time + " " + phase + " " + event.agent_id + " " + event.action + " " + what;
   log.prepend(line); // newest on top
 
   while (log.children.length > MAX_LOG_LINES) {

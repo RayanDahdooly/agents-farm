@@ -50,10 +50,6 @@ body {
 }
 
 .online {
-  color: #7bd88f;
-}
-
-.online {
   color: var(--green);
 }
 
