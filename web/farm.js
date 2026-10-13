@@ -34,7 +34,7 @@ const IMAGE_NAMES = [
   "fence_top_left", "fence_horizontal", "fence_top_right", "fence_left", "fence_right",
   "fence_bottom_left", "fence_bottom_right", "fence_gate_left", "fence_gate_right",
   "crop_carrot", "crop_turnip", "crop_corn", "crop_tomato", "crop_cabbage", "crop_wheat",
-  "farmer", "farmer2", "well_top", "well_bottom",
+  "farmer", "farmer2", "well_top", "well_bottom", "emote_exclamation",
   ...HOUSE_TILES.flat(),
 ];
 
@@ -351,6 +351,40 @@ function drawText(text, x, y, tileFraction, align, maxWidth) {
   ctx.fillText(text, x, y, maxWidth);
 }
 
+// A white speech bubble with dark text. Its tail points down at (x, tipY).
+function drawBubble(text, x, tipY) {
+  const px = Math.max(10, Math.round(view.size * 0.28));
+  ctx.font = "bold " + px + "px monospace";
+  ctx.textAlign = "center";
+  const pad = px * 0.5;
+  const tail = px * 0.5;
+  const width = ctx.measureText(text).width + pad * 2;
+  const height = px + pad * 1.4;
+  // Keep the box on the canvas; the tail still points at the farmer
+  const left = Math.max(2, Math.min(canvas.width - width - 2, x - width / 2));
+  const top = tipY - tail - height;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#2b2233";
+  ctx.lineWidth = Math.max(2, px / 6);
+  ctx.beginPath();
+  ctx.roundRect(left, top, width, height, px * 0.4);
+  ctx.fill();
+  ctx.stroke();
+
+  // The tail: fill it white (this hides the box border above it), then
+  // draw only its two slanted sides
+  ctx.beginPath();
+  ctx.moveTo(x - tail, top + height - ctx.lineWidth);
+  ctx.lineTo(x, tipY);
+  ctx.lineTo(x + tail, top + height - ctx.lineWidth);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#2b2233";
+  ctx.fillText(text, left + width / 2, top + height / 2 + px * 0.35);
+}
+
 function drawLabels() {
   for (const box of layout.fields) {
     drawText(box.name, toX(box.left + 1) + 4, toY(box.top - 1) + view.size * 0.65, 0.4, "left");
@@ -387,6 +421,7 @@ function draw() {
   }
   drawAgents(); // in agents.js
   drawLabels();
+  drawBubbles(); // in agents.js
 }
 
 // ---------- Starting up ----------
@@ -421,6 +456,7 @@ function frame(time) {
 
 async function main() {
   images = await loadImages();
+  setupLearningSwitch(); // in learning.js
   resize();
   window.addEventListener("resize", resize);
   updateStatus(); // in agents.js

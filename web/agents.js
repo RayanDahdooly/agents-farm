@@ -6,15 +6,18 @@ const WALK_SPEED = 4;        // tiles per second
 const DEMO_INTERVAL = 2500;  // milliseconds between fake events
 const MAX_LOG_LINES = 50;
 const MAX_LOG_TEXT = 40;     // longer files/commands are cut, full text on hover
+const ALERT_TIME = 8000;     // milliseconds the red ! stays above a farmer
+const BUBBLE_TIME = 4000;    // milliseconds a speech bubble stays (learning mode)
 
 // An agent's state is one of:
 //   "home"       inside the house (not drawn)
 //   "walking"    on the way to a crop or the well
 //   "working"    standing next to its crop, or at the well
 //   "going-home" on the way back to the house
-function newAgent(id, sprite) {
+function newAgent(id, name, sprite) {
   return {
-    id,
+    id,                   // Claude's session id: long, like "3f2a9c1e-..."
+    name,                 // friendly name for the screen, like "Lina"
     sprite,
     state: "home",
     col: layout.door.col, // position in farm tiles (can be 3.5 while walking)
@@ -22,16 +25,52 @@ function newAgent(id, sprite) {
     plot: null,           // the crop it is working on, or null
     atWell: false,        // true while it is at (or walking to) the well
     command: null,        // the command it runs at the well
+    alertUntil: 0,        // show the red ! until this time (see ALERT_TIME)
+    bubble: "",           // what it says in its speech bubble (learning mode)
+    bubbleUntil: 0,       // show the bubble until this time (see BUBBLE_TIME)
     path: [],             // points still to walk to: [{ col, row }, ...]
     queue: [],            // events waiting until it finishes walking
   };
 }
 
-const agents = [
-  newAgent("main", "farmer"),
-  newAgent("sub-1", "farmer2"),
-  newAgent("sub-2", "farmer"),
+// Starts empty. Every new id (a new Claude Code session) adds a farmer,
+// just like every new file adds a crop.
+const agents = [];
+
+const NAMES = [
+  "Sami", "Lina", "Omar", "Noor", "Karim", "Yara", "Zaid", "Maya", "Rami", "Huda",
+  "Fadi", "Dana", "Tariq", "Salma", "Jad", "Rana", "Hadi", "Mira", "Nabil", "Leen",
 ];
+
+// A simple hash: turn the id into a number, then pick a name with it.
+// Every character has a number code ("a" is 97). Mix them in one by one:
+// times 31, plus the code. "% NAMES.length" keeps only the remainder after
+// dividing by 20, so the result is always 0 to 19: a spot in the list.
+// The same id always gives the same number, so the name survives a reload.
+function nameFor(id) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) % NAMES.length;
+  }
+  return NAMES[hash];
+}
+
+// Find the farmer for this id, or create a new one at the house door
+function getAgent(id) {
+  let agent = agents.find((a) => a.id === id);
+  if (agent) return agent;
+
+  // Two sessions can land on the same name (1 in 20): add a number then
+  let name = nameFor(id);
+  const sameName = agents.filter((a) => a.name.split(" ")[0] === name).length;
+  if (sameName > 0) name += " " + (sameName + 1);
+
+  const sprite = agents.length % 2 === 0 ? "farmer" : "farmer2"; // take turns
+  agent = newAgent(id, name, sprite);
+  agents.push(agent);
+  updateStatus();
+  return agent;
+}
 
 function countAgentsHome() {
   return agents.filter((agent) => agent.state === "home").length;
@@ -99,10 +138,18 @@ function routeHome(agent) {
 
 // Every event (from the server, or the ?demo) comes in here
 function handleEvent(event) {
+  const agent = getAgent(event.agent_id); // a new id makes a new farmer
   addLog(event);
   if (event.file) growFarm(event.file); // in farm.js: adds the file if it is new
-  const agent = agents.find((a) => a.id === event.agent_id);
-  if (agent) agent.queue.push(event);
+  agent.queue.push(event);
+  // The server marked it as risky: show the red ! right away, even mid-walk
+  if (event.danger && event.phase === "start") agent.alertUntil = performance.now() + ALERT_TIME;
+  // Bubbles only for starts and "done": an "end" comes right after its
+  // start, so "Finished ..." would replace the bubble before you can read it
+  if (event.phase === "start" || event.action === "done") {
+    agent.bubble = describe(event); // in learning.js
+    agent.bubbleUntil = performance.now() + BUBBLE_TIME;
+  }
 }
 
 // Act on the waiting events. Only called when the agent is not walking.
@@ -196,7 +243,23 @@ function drawAgents() {
   for (const agent of agents) {
     if (agent.state === "home") continue; // inside the house, not visible
     drawTile(agent.sprite, agent.col + view.offsetCol, agent.row + view.offsetRow);
-    drawText(agent.id, toX(agent.col + 0.5), toY(agent.row) - 2, 0.22, "center");
+    drawText(agent.name, toX(agent.col + 0.5), toY(agent.row) - 2, 0.22, "center");
+    if (performance.now() < agent.alertUntil) {
+      // The red ! goes just above the name
+      drawTile("emote_exclamation", agent.col + view.offsetCol, agent.row - 1.25 + view.offsetRow);
+    }
+  }
+}
+
+// Speech bubbles go on top of everything, so draw() calls this last
+function drawBubbles() {
+  if (!isLearning()) return; // in learning.js
+  const now = performance.now();
+  for (const agent of agents) {
+    if (agent.state === "home" || now >= agent.bubbleUntil) continue;
+    // Leave room for the name, and for the red ! if it is showing
+    const above = now < agent.alertUntil ? 1.3 : 0.3;
+    drawBubble(agent.bubble, toX(agent.col + 0.5), toY(agent.row - above)); // in farm.js
   }
 }
 
@@ -217,18 +280,43 @@ function addLog(event) {
   const log = document.getElementById("log");
   document.getElementById("log-waiting")?.remove();
 
-  // event.time is UTC ("...14:30:05Z"). new Date() reads it, and
-  // toLocaleTimeString() shows it in this computer's time zone.
-  const time = new Date(event.time).toLocaleTimeString([], { hour12: false });
-  const what = (event.file || event.command || "").replace(/\s+/g, " "); // one line, even for multi-line commands
-  const phase = event.phase === "start" ? "▶" : "✓"; // started or finished
   const line = document.createElement("li");
-  line.textContent = time + " " + phase + " " + event.agent_id + " " + event.action + " " + shorten(what, MAX_LOG_TEXT);
-  line.title = what; // the browser shows this as a tooltip on hover
+  line.event = event; // kept, so refreshLog() can rewrite the line later
+  fillLogLine(line);
   log.prepend(line); // newest on top
 
   while (log.children.length > MAX_LOG_LINES) {
     log.lastElementChild.remove();
+  }
+}
+
+// Write one log line, in plain English (learning mode) or technical
+function fillLogLine(line) {
+  const event = line.event;
+  // event.time is UTC ("...14:30:05Z"). new Date() reads it, and
+  // toLocaleTimeString() shows it in this computer's time zone.
+  const time = new Date(event.time).toLocaleTimeString([], { hour12: false });
+  const what = (event.file || event.command || "").replace(/\s+/g, " "); // one line, even for multi-line commands
+  const technical = (event.action + " " + what).trim();
+  const phase = event.phase === "start" ? "▶" : "✓"; // started or finished
+
+  const name = getAgent(event.agent_id).name;
+  const text = isLearning()
+    ? name + ": " + shorten(describe(event), MAX_LOG_TEXT)
+    : name + " " + event.action + " " + shorten(what, MAX_LOG_TEXT);
+  line.textContent = time + " " + phase + " " + text;
+  // The browser shows this as a tooltip on hover
+  line.title = technical + "\nsession: " + event.agent_id;
+  if (event.danger) {
+    line.classList.add("danger"); // red, see style.css
+    line.textContent += " ⚠ " + event.reason;
+  }
+}
+
+// Called when learning mode is switched on or off
+function refreshLog() {
+  for (const line of document.querySelectorAll("#log li")) {
+    if (line.event) fillLogLine(line);
   }
 }
 
@@ -241,6 +329,8 @@ const DEMO_EVENTS = [
   { agent_id: "main",  file: "src/utils.py",      action: "edit",    phase: "start" },
   { agent_id: "sub-2", file: "README.md",         action: "read",    phase: "start" },
   { agent_id: "sub-1", file: null,                action: "command", phase: "start", command: "pytest" },
+  // In the demo there is no server, so danger and reason are written here by hand
+  { agent_id: "sub-2", file: null,                action: "command", phase: "start", command: "rm -rf build", danger: true, reason: "Deletes files for good" },
   { agent_id: "main",  file: "requirements.txt",  action: "edit",    phase: "start" },
   { agent_id: "main",  file: null,                action: "command", phase: "start", command: "python -m pytest tests/ -v --maxfail=1 && git status --short" },
   { agent_id: "sub-1", file: null,                action: "done",    phase: "end" },

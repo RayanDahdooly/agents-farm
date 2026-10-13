@@ -97,6 +97,12 @@ body {
   padding: 4px 0;
 }
 
+/* A risky event (the server set "danger": true) */
+#log li.danger {
+  color: var(--red);
+  font-weight: bold;
+}
+
 /* Small screens: put the log under the farm instead of beside it */
 @media (max-width: 700px) {
   body {

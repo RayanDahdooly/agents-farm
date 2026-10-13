@@ -2,6 +2,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import Literal
 from pydantic import BaseModel
 
+from server.danger import find_danger
+
 app = FastAPI()
 
 connections: list[WebSocket] = []
@@ -13,6 +15,8 @@ class Event(BaseModel):
     phase: Literal["start", "end"]                        # ← changed
     command: str | None = None
     time: str
+    danger: bool = False       # set by the server, not the hook (see danger.py)
+    reason: str | None = None  # why it is risky, like "Deletes files for good"
 
 @app.get("/")
 def home():
@@ -20,6 +24,8 @@ def home():
 
 @app.post("/events")
 async def receive_event(event: Event):
+    event.reason = find_danger(event)
+    event.danger = event.reason is not None
     print(event)
     for ws in connections:
         await ws.send_json(event.model_dump())

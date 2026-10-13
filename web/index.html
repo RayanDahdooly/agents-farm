@@ -12,7 +12,10 @@
   <!-- Top: status bar -->
   <header id="status-bar">
     <h1>Agents Farm</h1>
-    <p><span id="farmer-count">0 farmers</span> · <span id="connection" class="offline">offline</span></p>
+    <p>
+      <label><input type="checkbox" id="learning-mode" checked> Learning mode</label> ·
+      <span id="farmer-count">0 farmers</span> · <span id="connection" class="offline">offline</span>
+    </p>
   </header>
 
   <!-- Center: the farm is drawn inside this canvas by farm.js -->
@@ -28,8 +31,9 @@
     </ul>
   </aside>
 
-  <!-- farm.js draws the farm, agents.js moves the farmers -->
+  <!-- farm.js draws the farm, learning.js writes plain sentences, agents.js moves the farmers -->
   <script src="farm.js"></script>
+  <script src="learning.js"></script>
   <script src="agents.js"></script>
   <script src="connection.js"></script>
 </body>

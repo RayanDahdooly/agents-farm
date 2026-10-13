@@ -72,9 +72,11 @@ def file_read_by(command, cwd, project_dir):
 def make_event(hook):
     """Turn Claude Code's hook JSON into our event, or None to skip it."""
     name = hook.get("hook_event_name")
+    # Every Claude Code session has its own id, so each session gets its own farmer
+    agent_id = hook.get("session_id") or "main"
 
     if name == "Stop":
-        return {"agent_id": "main", "file": None, "action": "done",
+        return {"agent_id": agent_id, "file": None, "action": "done",
                 "phase": "end", "command": None, "time": now()}
 
     if name not in PHASES:
@@ -97,7 +99,7 @@ def make_event(hook):
         if file is None:
             return None  # a file outside this project: not part of the farm
 
-    return {"agent_id": "main", "file": file, "action": action,
+    return {"agent_id": agent_id, "file": file, "action": action,
             "phase": PHASES[name], "command": command, "time": now()}
 
 

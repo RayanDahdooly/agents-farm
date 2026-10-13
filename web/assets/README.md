@@ -1,6 +1,6 @@
 # Assets
 
-Pixel art by Kenney (www.kenney.nl), license CC0 (public domain).
+Pixel art by Kenney (www.kenney.nl), license CC0 (public domain): Tiny Farm, Tiny Town and Emotes.
 Each tile is 16 × 16 pixels.
 
 ## From Tiny Farm
@@ -50,3 +50,9 @@ Each tile is 16 × 16 pixels.
 | house_door.png | tile_0085 |
 | well_top.png | tile_0092 |
 | well_bottom.png | tile_0104 |
+
+## From Emotes (Pixel, Style 1)
+
+| File | Original file |
+|---|---|
+| emote_exclamation.png | emote_exclamation.png |
