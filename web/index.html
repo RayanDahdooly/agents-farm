@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agents Farm</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top: status bar -->
+  <header id="status-bar">
+    <h1>Agents Farm</h1>
+    <p><span id="farmer-count">1 farmer</span> · <span id="connection" class="offline">offline</span></p>
+  </header>
+
+  <!-- Center: the farm is drawn inside this canvas by farm.js -->
+  <main id="farm">
+    <canvas id="farm-canvas"></canvas>
+  </main>
+
+  <!-- Right: log of what the farmers do -->
+  <aside id="log-panel">
+    <h2>Log</h2>
+    <ul id="log">
+      <li>Waiting for events…</li>
+    </ul>
+  </aside>
+
+  <!-- Load the script last, so the canvas above already exists -->
+  <script src="farm.js"></script>
+</body>
+</html>
