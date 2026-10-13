@@ -369,7 +369,8 @@ async function main() {
   images = await loadImages();
   resize();
   window.addEventListener("resize", resize);
-  startDemo(); // in agents.js
+  updateStatus();    // in agents.js
+  connectToServer(); // in connection.js
   requestAnimationFrame(frame);
 }
 

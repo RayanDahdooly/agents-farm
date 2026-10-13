@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Agents Farm</title>
   <link rel="stylesheet" href="style.css">
+
 </head>
 <body>
 
   <!-- Top: status bar -->
   <header id="status-bar">
     <h1>Agents Farm</h1>
-    <p><span id="farmer-count">0 farmers</span> · <span id="connection" class="offline">offline (demo)</span></p>
+    <p><span id="farmer-count">0 farmers</span> · <span id="connection" class="offline">offline</span></p>
   </header>
 
   <!-- Center: the farm is drawn inside this canvas by farm.js -->
@@ -30,5 +31,6 @@
   <!-- farm.js draws the farm, agents.js moves the farmers -->
   <script src="farm.js"></script>
   <script src="agents.js"></script>
+  <script src="connection.js"></script>
 </body>
 </html>
